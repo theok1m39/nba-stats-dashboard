@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NBA Player Comparison Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 2rem; }
+    h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+    .search-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
+    .search-box { position: relative; }
+    .search-box input { width: 100%; padding: 10px 14px; font-size: 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #1a1a1a; outline: none; }
+    .search-box input:focus { border-color: #aaa; }
+    .dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #ddd; border-radius: 8px; z-index: 10; max-height: 200px; overflow-y: auto; margin-top: 4px; }
+    .dropdown-item { padding: 10px 14px; font-size: 13px; cursor: pointer; color: #1a1a1a; }
+    .dropdown-item:hover { background: #f5f5f5; }
+    .player-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
+    .player-card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1rem 1.25rem; }
+    .player-card.p1 { border-top: 3px solid #378ADD; }
+    .player-card.p2 { border-top: 3px solid #D85A30; }
+    .player-name { font-size: 16px; font-weight: 500; margin-bottom: 2px; }
+    .player-team { font-size: 12px; color: #888; }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { font-size: 13px; color: #888; }
+    .stat-val { font-size: 14px; font-weight: 500; }
+    .stat-val.winner { color: #1D9E75; }
+    .bar-section { margin-bottom: 1rem; }
+    .bar-label { font-size: 13px; color: #888; margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .bar-track { background: #eee; border-radius: 4px; height: 8px; margin-bottom: 6px; }
+    .bar-fill { height: 8px; border-radius: 4px; transition: width 0.4s; }
+    .legend { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; display: inline-block; }
+    .legend-item { display: flex; align-items: center; font-size: 13px; color: #888; }
+    .empty-state { text-align: center; padding: 3rem 1rem; color: #aaa; font-size: 14px; border: 1px dashed #ddd; border-radius: 12px; }
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; background: #E6F1FB; color: #185FA5; }
+    .section-title { font-size: 14px; font-weight: 500; margin-bottom: 1rem; color: #555; }
+  </style>
+</head>
+<body>
+  <h1>NBA Player Comparison</h1>
+  <p class="subtitle">Search two players to compare their stats side by side</p>
+
+  <div class="search-row">
+    <div class="search-box">
+      <input id="search1" placeholder="Search player 1..." autocomplete="off" oninput="handleSearch(1)" onfocus="showDropdown(1)" />
+      <div class="dropdown" id="drop1" style="display:none"></div>
+    </div>
+    <div class="search-box">
+      <input id="search2" placeholder="Search player 2..." autocomplete="off" oninput="handleSearch(2)" onfocus="showDropdown(2)" />
+      <div class="dropdown" id="drop2" style="display:none"></div>
+    </div>
+  </div>
+
+  <div id="main-content">
+    <div class="empty-state">Search for two players above to compare their stats</div>
+  </div>
+
+  <script>
+    const players = [
+      { name: "LeBron James", team: "Los Angeles Lakers", pos: "SF", pts: 25.7, ast: 8.3, reb: 7.3, fg: 54.0, tpm: 1.8, blk: 0.6, stl: 1.1 },
+      { name: "Stephen Curry", team: "Golden State Warriors", pos: "PG", pts: 26.4, ast: 5.1, reb: 4.5, fg: 45.0, tpm: 5.1, blk: 0.2, stl: 0.9 },
+      { name: "Kevin Durant", team: "Phoenix Suns", pos: "SF", pts: 27.1, ast: 5.0, reb: 6.6, fg: 52.3, tpm: 2.4, blk: 1.1, stl: 0.7 },
+      { name: "Giannis Antetokounmpo", team: "Milwaukee Bucks", pos: "PF", pts: 30.4, ast: 6.5, reb: 11.5, fg: 61.1, tpm: 0.8, blk: 1.1, stl: 1.2 },
+      { name: "Luka Doncic", team: "Dallas Mavericks", pos: "PG", pts: 33.9, ast: 9.8, reb: 9.2, fg: 48.7, tpm: 3.6, blk: 0.5, stl: 1.4 },
+      { name: "Nikola Jokic", team: "Denver Nuggets", pos: "C", pts: 26.4, ast: 9.0, reb: 12.4, fg: 58.3, tpm: 0.9, blk: 0.9, stl: 1.3 },
+      { name: "Joel Embiid", team: "Philadelphia 76ers", pos: "C", pts: 34.7, ast: 5.6, reb: 11.0, fg: 54.8, tpm: 0.4, blk: 1.7, stl: 1.0 },
+      { name: "Jayson Tatum", team: "Boston Celtics", pos: "SF", pts: 26.9, ast: 4.9, reb: 8.1, fg: 47.0, tpm: 3.2, blk: 0.6, stl: 1.0 },
+      { name: "Devin Booker", team: "Phoenix Suns", pos: "SG", pts: 27.1, ast: 6.9, reb: 4.5, fg: 49.6, tpm: 3.4, blk: 0.3, stl: 0.9 },
+      { name: "Anthony Davis", team: "Los Angeles Lakers", pos: "C", pts: 24.7, ast: 3.5, reb: 12.6, fg: 56.3, tpm: 0.4, blk: 2.3, stl: 1.2 },
+      { name: "Damian Lillard", team: "Milwaukee Bucks", pos: "PG", pts: 24.3, ast: 7.0, reb: 4.4, fg: 43.2, tpm: 3.5, blk: 0.3, stl: 0.9 },
+      { name: "Trae Young", team: "Atlanta Hawks", pos: "PG", pts: 25.7, ast: 10.8, reb: 3.3, fg: 43.5, tpm: 3.3, blk: 0.1, stl: 0.9 },
+      { name: "Zion Williamson", team: "New Orleans Pelicans", pos: "PF", pts: 22.9, ast: 5.0, reb: 5.8, fg: 57.5, tpm: 0.4, blk: 0.6, stl: 1.0 },
+      { name: "Kawhi Leonard", team: "LA Clippers", pos: "SF", pts: 23.7, ast: 3.6, reb: 6.1, fg: 52.5, tpm: 2.6, blk: 0.8, stl: 1.6 },
+      { name: "Jimmy Butler", team: "Miami Heat", pos: "SF", pts: 20.8, ast: 5.3, reb: 5.3, fg: 49.3, tpm: 1.2, blk: 0.5, stl: 1.6 },
+    ];
+
+    const statKeys = [
+      { key: "pts", label: "Points per game" },
+      { key: "ast", label: "Assists per game" },
+      { key: "reb", label: "Rebounds per game" },
+      { key: "fg",  label: "FG%" },
+      { key: "tpm", label: "3PM per game" },
+      { key: "blk", label: "Blocks per game" },
+      { key: "stl", label: "Steals per game" },
+    ];
+
+    let selected = [null, null];
+
+    function handleSearch(idx) {
+      showDropdown(idx);
+    }
+
+    function showDropdown(idx) {
+      const input = document.getElementById('search' + idx);
+      const drop = document.getElementById('drop' + idx);
+      const q = input.value.toLowerCase();
+      if (!q) { drop.style.display = 'none'; return; }
+      const filtered = players.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
+      if (filtered.length === 0) {
+        drop.style.display = 'block';
+        drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">No players found</div>';
+        return;
+      }
+      drop.style.display = 'block';
+      drop.innerHTML = filtered.map(p =>
+        `<div class="dropdown-item" onclick="selectPlayer(${players.indexOf(p)}, ${idx})">${p.name} <span style="color:#aaa;font-size:12px">· ${p.team}</span></div>`
+      ).join('');
+    }
+
+    function selectPlayer(playerIdx, slot) {
+      selected[slot - 1] = players[playerIdx];
+      document.getElementById('search' + slot).value = players[playerIdx].name;
+      document.getElementById('drop' + slot).style.display = 'none';
+      render();
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.search-box')) {
+        document.getElementById('drop1').style.display = 'none';
+        document.getElementById('drop2').style.display = 'none';
+      }
+    });
+
+    function render() {
+      const main = document.getElementById('main-content');
+      if (!selected[0] || !selected[1]) {
+        main.innerHTML = '<div class="empty-state">Select a second player to compare</div>';
+        return;
+      }
+      const p1 = selected[0], p2 = selected[1];
+
+      const cards = `
+        <div class="player-cards">
+          <div class="player-card p1">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+              <div><div class="player-name">${p1.name}</div><div class="player-team">${p1.team}</div></div>
+              <span class="tag">${p1.pos}</span>
+            </div>
+            ${statKeys.map(s => `<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${p1[s.key] > p2[s.key] ? 'winner' : ''}">${p1[s.key].toFixed(1)}</span></div>`).join('')}
+          </div>
+          <div class="player-card p2">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+              <div><div class="player-name">${p2.name}</div><div class="player-team">${p2.team}</div></div>
+              <span class="tag">${p2.pos}</span>
+            </div>
+            ${statKeys.map(s => `<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${p2[s.key] > p1[s.key] ? 'winner' : ''}">${p2[s.key].toFixed(1)}</span></div>`).join('')}
+          </div>
+        </div>`;
+
+      const legend = `
+        <div class="legend">
+          <div class="legend-item"><span class="legend-dot" style="background:#378ADD"></span>${p1.name}</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#D85A30"></span>${p2.name}</div>
+          <span style="font-size:12px;color:#aaa;margin-left:auto">green = higher value</span>
+        </div>`;
+
+      const bars = `<div class="section-title">Visual comparison</div>` + statKeys.map(s => {
+        const max = Math.max(p1[s.key], p2[s.key]);
+        const w1 = Math.round((p1[s.key] / max) * 100);
+        const w2 = Math.round((p2[s.key] / max) * 100);
+        return `
+          <div class="bar-section">
+            <div class="bar-label"><span>${s.label}</span><span>${p1[s.key].toFixed(1)} vs ${p2[s.key].toFixed(1)}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${w1}%;background:#378ADD"></div></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${w2}%;background:#D85A30"></div></div>
+          </div>`;
+      }).join('');
+
+      main.innerHTML = cards + legend + bars;
+    }
+  </script>
+</body>
+</html>
