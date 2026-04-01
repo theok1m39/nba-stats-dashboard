@@ -143,7 +143,7 @@
 
 <script>
   const API_KEY = 'ddebcd34-a071-414e-af89-e03e66654801';
-  const BASE = 'https://api.balldontlie.io/v1';
+  const BASE = 'https://api.balldontlie.io/nba/v1';
   const SEASON = 2024;
 
   const allCats = [
@@ -182,7 +182,7 @@
 
   async function getPlayerStats(playerId) {
     try {
-      const data = await apiFetch(`${BASE}/season_averages/${SEASON}?player_ids[]=${playerId}`);
+     const data = await apiFetch(`${BASE}/season_averages/general?season=${SEASON}&season_type=regular&type=base&player_ids[]=${playerId}`);
       return data.data[0] || null;
     } catch(e) {
       console.error('Stats error:', e);
