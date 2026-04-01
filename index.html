@@ -7,9 +7,9 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; }
-    .header { background: #fff; border-bottom: 1px solid #eee; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; }
+    .header { background: #fff; border-bottom: 1px solid #eee; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; }
     .header h1 { font-size: 18px; font-weight: 500; }
-    .header span { font-size: 12px; color: #888; }
+    .live-badge { font-size: 11px; background: #EAF3DE; color: #3B6D11; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
     .tabs { display: flex; background: #fff; border-bottom: 1px solid #eee; padding: 0 1.5rem; }
     .tab { padding: 12px 20px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; color: #888; font-weight: 500; }
     .tab.active { color: #378ADD; border-bottom-color: #378ADD; }
@@ -42,6 +42,8 @@
     .legend-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; display: inline-block; }
     .legend-item { display: flex; align-items: center; font-size: 13px; color: #888; }
     .empty-state { text-align: center; padding: 2.5rem 1rem; color: #aaa; font-size: 14px; border: 1px dashed #ddd; border-radius: 12px; }
+    .loading-state { text-align: center; padding: 2rem; color: #888; font-size: 14px; }
+    .error-state { text-align: center; padding: 2rem; color: #E24B4A; font-size: 13px; background: #FCEBEB; border-radius: 8px; border: 1px solid #F7C1C1; }
     .tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; background: #E6F1FB; color: #185FA5; }
     .card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
     .card-title { font-size: 14px; font-weight: 500; margin-bottom: 1rem; }
@@ -77,7 +79,7 @@
 
 <div class="header">
   <h1>🏀 NBA Analytics</h1>
-  <span>General + Fantasy Tools</span>
+  <span class="live-badge" id="live-badge">Connecting...</span>
 </div>
 
 <div class="tabs">
@@ -90,11 +92,11 @@
   <div class="section-label">Player Comparison</div>
   <div class="search-row">
     <div class="search-box">
-      <input id="search1" placeholder="Search player 1..." autocomplete="off" oninput="handleSearch(1)" onfocus="openDrop(1)" />
+      <input id="search1" placeholder="Search player 1..." autocomplete="off" oninput="handleSearch(this,1)" />
       <div class="dropdown" id="drop1" style="display:none"></div>
     </div>
     <div class="search-box">
-      <input id="search2" placeholder="Search player 2..." autocomplete="off" oninput="handleSearch(2)" onfocus="openDrop(2)" />
+      <input id="search2" placeholder="Search player 2..." autocomplete="off" oninput="handleSearch(this,2)" />
       <div class="dropdown" id="drop2" style="display:none"></div>
     </div>
   </div>
@@ -121,18 +123,18 @@
     <div class="trade-side">
       <h3>You give up</h3>
       <div class="mini-search">
-        <input placeholder="Add player..." oninput="tradeSearch(this,1)" onfocus="tradeSearch(this,1)" autocomplete="off" />
+        <input placeholder="Add player..." oninput="tradeSearch(this,1)" autocomplete="off" />
         <div class="dropdown" id="trade-drop1" style="display:none"></div>
       </div>
-      <div id="give-list"></div>
+      <div id="give-list"><div style="font-size:13px;color:#aaa;padding:8px 0">No players added</div></div>
     </div>
     <div class="trade-side">
       <h3>You receive</h3>
       <div class="mini-search">
-        <input placeholder="Add player..." oninput="tradeSearch(this,2)" onfocus="tradeSearch(this,2)" autocomplete="off" />
+        <input placeholder="Add player..." oninput="tradeSearch(this,2)" autocomplete="off" />
         <div class="dropdown" id="trade-drop2" style="display:none"></div>
       </div>
-      <div id="get-list"></div>
+      <div id="get-list"><div style="font-size:13px;color:#aaa;padding:8px 0">No players added</div></div>
     </div>
   </div>
   <button class="analyze-btn" onclick="analyzeTrade()">Analyze Trade</button>
@@ -140,214 +142,259 @@
 </div>
 
 <script>
-const players = [
-  { name: "LeBron James", team: "Lakers", pos: "SF", pts: 25.7, ast: 8.3, reb: 7.3, fg: 54.0, tpm: 1.8, blk: 0.6, stl: 1.1, to: 3.5 },
-  { name: "Stephen Curry", team: "Warriors", pos: "PG", pts: 26.4, ast: 5.1, reb: 4.5, fg: 45.0, tpm: 5.1, blk: 0.2, stl: 0.9, to: 3.1 },
-  { name: "Kevin Durant", team: "Suns", pos: "SF", pts: 27.1, ast: 5.0, reb: 6.6, fg: 52.3, tpm: 2.4, blk: 1.1, stl: 0.7, to: 3.3 },
-  { name: "Giannis Antetokounmpo", team: "Bucks", pos: "PF", pts: 30.4, ast: 6.5, reb: 11.5, fg: 61.1, tpm: 0.8, blk: 1.1, stl: 1.2, to: 3.6 },
-  { name: "Luka Doncic", team: "Mavericks", pos: "PG", pts: 33.9, ast: 9.8, reb: 9.2, fg: 48.7, tpm: 3.6, blk: 0.5, stl: 1.4, to: 4.0 },
-  { name: "Nikola Jokic", team: "Nuggets", pos: "C", pts: 26.4, ast: 9.0, reb: 12.4, fg: 58.3, tpm: 0.9, blk: 0.9, stl: 1.3, to: 3.0 },
-  { name: "Joel Embiid", team: "76ers", pos: "C", pts: 34.7, ast: 5.6, reb: 11.0, fg: 54.8, tpm: 0.4, blk: 1.7, stl: 1.0, to: 3.4 },
-  { name: "Jayson Tatum", team: "Celtics", pos: "SF", pts: 26.9, ast: 4.9, reb: 8.1, fg: 47.0, tpm: 3.2, blk: 0.6, stl: 1.0, to: 2.9 },
-  { name: "Devin Booker", team: "Suns", pos: "SG", pts: 27.1, ast: 6.9, reb: 4.5, fg: 49.6, tpm: 3.4, blk: 0.3, stl: 0.9, to: 3.2 },
-  { name: "Anthony Davis", team: "Lakers", pos: "C", pts: 24.7, ast: 3.5, reb: 12.6, fg: 56.3, tpm: 0.4, blk: 2.3, stl: 1.2, to: 2.1 },
-  { name: "Damian Lillard", team: "Bucks", pos: "PG", pts: 24.3, ast: 7.0, reb: 4.4, fg: 43.2, tpm: 3.5, blk: 0.3, stl: 0.9, to: 2.8 },
-  { name: "Trae Young", team: "Hawks", pos: "PG", pts: 25.7, ast: 10.8, reb: 3.3, fg: 43.5, tpm: 3.3, blk: 0.1, stl: 0.9, to: 4.1 },
-  { name: "Zion Williamson", team: "Pelicans", pos: "PF", pts: 22.9, ast: 5.0, reb: 5.8, fg: 57.5, tpm: 0.4, blk: 0.6, stl: 1.0, to: 2.7 },
-  { name: "Kawhi Leonard", team: "Clippers", pos: "SF", pts: 23.7, ast: 3.6, reb: 6.1, fg: 52.5, tpm: 2.6, blk: 0.8, stl: 1.6, to: 1.9 },
-  { name: "Jimmy Butler", team: "Heat", pos: "SF", pts: 20.8, ast: 5.3, reb: 5.3, fg: 49.3, tpm: 1.2, blk: 0.5, stl: 1.6, to: 2.1 },
-  { name: "Ja Morant", team: "Grizzlies", pos: "PG", pts: 26.2, ast: 8.1, reb: 5.9, fg: 47.6, tpm: 1.2, blk: 0.5, stl: 1.1, to: 3.4 },
-  { name: "Bam Adebayo", team: "Heat", pos: "C", pts: 19.8, ast: 3.4, reb: 10.4, fg: 53.9, tpm: 0.1, blk: 0.9, stl: 1.2, to: 2.5 },
-  { name: "Donovan Mitchell", team: "Cavaliers", pos: "SG", pts: 28.0, ast: 6.1, reb: 4.4, fg: 46.2, tpm: 3.3, blk: 0.4, stl: 1.5, to: 3.1 },
-  { name: "Paul George", team: "76ers", pos: "SF", pts: 22.6, ast: 3.5, reb: 5.2, fg: 44.6, tpm: 3.0, blk: 0.6, stl: 1.5, to: 2.0 },
-  { name: "Draymond Green", team: "Warriors", pos: "PF", pts: 8.5, ast: 6.5, reb: 7.2, fg: 49.2, tpm: 0.5, blk: 0.8, stl: 1.0, to: 3.1 },
-];
+  const API_KEY = 'ddebcd34-a071-414e-af89-e03e66654801';
+  const BASE = 'https://api.balldontlie.io/v1';
+  const SEASON = 2024;
 
-const allCats = [
-  { key: "pts", label: "PTS", lower: false },
-  { key: "ast", label: "AST", lower: false },
-  { key: "reb", label: "REB", lower: false },
-  { key: "tpm", label: "3PM", lower: false },
-  { key: "stl", label: "STL", lower: false },
-  { key: "blk", label: "BLK", lower: false },
-  { key: "fg",  label: "FG%", lower: false },
-  { key: "to",  label: "TO",  lower: true  },
-];
+  const allCats = [
+    { key: "pts",      label: "PTS", lower: false },
+    { key: "ast",      label: "AST", lower: false },
+    { key: "reb",      label: "REB", lower: false },
+    { key: "fg3m",     label: "3PM", lower: false },
+    { key: "stl",      label: "STL", lower: false },
+    { key: "blk",      label: "BLK", lower: false },
+    { key: "fg_pct",   label: "FG%", lower: false },
+    { key: "turnover", label: "TO",  lower: true  },
+  ];
 
-const statKeys = [
-  { key: "pts", label: "Points" },
-  { key: "ast", label: "Assists" },
-  { key: "reb", label: "Rebounds" },
-  { key: "fg",  label: "FG%" },
-  { key: "tpm", label: "3PM" },
-  { key: "blk", label: "Blocks" },
-  { key: "stl", label: "Steals" },
-];
+  const statKeys = [
+    { key: "pts",    label: "Points"   },
+    { key: "ast",    label: "Assists"  },
+    { key: "reb",    label: "Rebounds" },
+    { key: "fg_pct", label: "FG%"      },
+    { key: "fg3m",   label: "3PM"      },
+    { key: "blk",    label: "Blocks"   },
+    { key: "stl",    label: "Steals"   },
+  ];
 
-let activeCats = new Set(["pts","ast","reb","tpm","stl","blk","fg"]);
-let tradeActiveCats = new Set(["pts","ast","reb","tpm","stl","blk","fg"]);
-let tradeSides = [[],[]];
-let selected = [null, null];
+  let activeCats      = new Set(["pts","ast","reb","fg3m","stl","blk","fg_pct"]);
+  let tradeActiveCats = new Set(["pts","ast","reb","fg3m","stl","blk","fg_pct"]);
+  let tradeSides      = [[], []];
+  let selected        = [null, null];
+  let searchTimers    = {};
+  let allLoadedPlayers = [];
 
-function buildCatGrids() {
-  [["cat-grid", activeCats], ["trade-cat-grid", tradeActiveCats]].forEach(([id, set]) => {
-    document.getElementById(id).innerHTML = allCats.map(c =>
-      `<button class="cat-btn ${set.has(c.key)?'active':''}" onclick="toggleCat('${c.key}','${id}')">${c.label}</button>`
-    ).join('');
-  });
-}
-
-function toggleCat(key, gridId) {
-  const set = gridId === 'cat-grid' ? activeCats : tradeActiveCats;
-  set.has(key) ? set.delete(key) : set.add(key);
-  buildCatGrids();
-}
-
-function switchTab(tab) {
-  ['general','rankings','trade'].forEach((t, i) => {
-    document.getElementById('tab-'+t).style.display = t===tab ? 'block' : 'none';
-    document.querySelectorAll('.tab')[i].classList.toggle('active', t===tab);
-  });
-}
-
-function handleSearch(idx) { openDrop(idx); }
-
-function openDrop(idx) {
-  const input = document.getElementById('search'+idx);
-  const drop = document.getElementById('drop'+idx);
-  const q = input.value.toLowerCase();
-  if (!q) { drop.style.display='none'; return; }
-  const filtered = players.filter(p => p.name.toLowerCase().includes(q) || p.team.toLowerCase().includes(q));
-  drop.style.display = 'block';
-  drop.innerHTML = filtered.length
-    ? filtered.map(p => `<div class="dropdown-item" onclick="selectPlayer(${players.indexOf(p)},${idx})">${p.name} <span style="color:#aaa;font-size:12px">· ${p.team}</span></div>`).join('')
-    : '<div class="dropdown-item" style="color:#aaa">No players found</div>';
-}
-
-function selectPlayer(pi, slot) {
-  selected[slot-1] = players[pi];
-  document.getElementById('search'+slot).value = players[pi].name;
-  document.getElementById('drop'+slot).style.display = 'none';
-  renderCompare();
-}
-
-function renderCompare() {
-  const main = document.getElementById('compare-content');
-  if (!selected[0] || !selected[1]) { main.innerHTML='<div class="empty-state">Select a second player to compare</div>'; return; }
-  const p1=selected[0], p2=selected[1];
-  const cards = `<div class="player-cards">
-    <div class="player-card p1">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div><div class="player-name">${p1.name}</div><div class="player-team">${p1.team}</div></div>
-        <span class="tag">${p1.pos}</span>
-      </div>
-      ${statKeys.map(s=>`<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${p1[s.key]>p2[s.key]?'winner':''}">${p1[s.key].toFixed(1)}</span></div>`).join('')}
-    </div>
-    <div class="player-card p2">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div><div class="player-name">${p2.name}</div><div class="player-team">${p2.team}</div></div>
-        <span class="tag">${p2.pos}</span>
-      </div>
-      ${statKeys.map(s=>`<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${p2[s.key]>p1[s.key]?'winner':''}">${p2[s.key].toFixed(1)}</span></div>`).join('')}
-    </div>
-  </div>`;
-  const legend = `<div class="legend"><div class="legend-item"><span class="legend-dot" style="background:#378ADD"></span>${p1.name}</div><div class="legend-item"><span class="legend-dot" style="background:#D85A30"></span>${p2.name}</div><span style="font-size:12px;color:#aaa;margin-left:auto">green = higher value</span></div>`;
-  const bars = statKeys.map(s=>{
-    const max=Math.max(p1[s.key],p2[s.key]);
-    const w1=Math.round(p1[s.key]/max*100), w2=Math.round(p2[s.key]/max*100);
-    return `<div class="bar-section"><div class="bar-label"><span>${s.label}</span><span>${p1[s.key].toFixed(1)} vs ${p2[s.key].toFixed(1)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${w1}%;background:#378ADD"></div></div><div class="bar-track"><div class="bar-fill" style="width:${w2}%;background:#D85A30"></div></div></div>`;
-  }).join('');
-  main.innerHTML = cards + legend + bars;
-}
-
-function playerScore(p, cats) {
-  const vals = {};
-  cats.forEach(c => { vals[c.key] = players.map(pl=>pl[c.key]); });
-  let score = 0;
-  cats.forEach(c => {
-    const arr = vals[c.key];
-    const min=Math.min(...arr), max=Math.max(...arr);
-    const norm = max===min ? 0.5 : (p[c.key]-min)/(max-min);
-    score += c.lower ? (1-norm) : norm;
-  });
-  return score;
-}
-
-function rankPlayers() {
-  const cats = allCats.filter(c=>activeCats.has(c.key));
-  if (!cats.length) { document.getElementById('rank-results').innerHTML='<div class="empty-state">Select at least one category</div>'; return; }
-  const scored = players.map(p=>({...p, score: playerScore(p,cats)})).sort((a,b)=>b.score-a.score);
-  const rows = scored.map((p,i)=>`<tr>
-    <td class="rank-num">${i+1}</td>
-    <td><strong style="font-weight:500">${p.name}</strong><br><span style="font-size:11px;color:#aaa">${p.team} · ${p.pos}</span></td>
-    ${cats.map(c=>`<td>${p[c.key].toFixed(1)}</td>`).join('')}
-    <td><span class="score-badge">${(p.score/cats.length*100).toFixed(0)}</span></td>
-  </tr>`).join('');
-  document.getElementById('rank-results').innerHTML=`<div class="card" style="overflow-x:auto"><table class="rank-table"><thead><tr><th>#</th><th>Player</th>${cats.map(c=>`<th>${c.label}</th>`).join('')}<th>Score</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-
-function tradeSearch(input, side) {
-  const drop = document.getElementById('trade-drop'+side);
-  const q = input.value.toLowerCase();
-  if (!q) { drop.style.display='none'; return; }
-  const filtered = players.filter(p=>p.name.toLowerCase().includes(q)||p.team.toLowerCase().includes(q));
-  drop.style.display='block';
-  drop.innerHTML = filtered.length
-    ? filtered.map(p=>`<div class="dropdown-item" onclick="addToTrade(${players.indexOf(p)},${side},this)">${p.name} <span style="color:#aaa;font-size:12px">· ${p.team}</span></div>`).join('')
-    : '<div class="dropdown-item" style="color:#aaa">No players found</div>';
-}
-
-function addToTrade(pi, side, el) {
-  const p = players[pi];
-  if (!tradeSides[side-1].find(x=>x.name===p.name)) tradeSides[side-1].push(p);
-  el.closest('.mini-search').querySelector('input').value='';
-  document.getElementById('trade-drop'+side).style.display='none';
-  renderTradeLists();
-}
-
-function removeFromTrade(name, side) {
-  tradeSides[side-1] = tradeSides[side-1].filter(p=>p.name!==name);
-  renderTradeLists();
-  document.getElementById('trade-result').innerHTML='';
-}
-
-function renderTradeLists() {
-  ['give','get'].forEach((id,i)=>{
-    document.getElementById(id+'-list').innerHTML = tradeSides[i].length
-      ? tradeSides[i].map(p=>`<div class="player-chip"><span>${p.name} <span style="color:#aaa;font-size:11px">· ${p.pos}</span></span><button class="remove-btn" onclick="removeFromTrade('${p.name}',${i+1})">×</button></div>`).join('')
-      : `<div style="font-size:13px;color:#aaa;padding:8px 0">No players added</div>`;
-  });
-}
-
-function analyzeTrade() {
-  const cats = allCats.filter(c=>tradeActiveCats.has(c.key));
-  if (!tradeSides[0].length || !tradeSides[1].length) { document.getElementById('trade-result').innerHTML='<div class="empty-state">Add players to both sides first</div>'; return; }
-  if (!cats.length) { document.getElementById('trade-result').innerHTML='<div class="empty-state">Select at least one category above</div>'; return; }
-  const scoreGroup = g => g.reduce((sum,p)=>sum+playerScore(p,cats),0)/g.length;
-  const giveScore=scoreGroup(tradeSides[0]), getScore=scoreGroup(tradeSides[1]);
-  const diff=getScore-giveScore;
-  const pct=Math.abs(diff/Math.max(giveScore,getScore)*100).toFixed(0);
-  let cls, emoji, title, sub;
-  if (diff>0.05) { cls='result-win'; emoji='✅'; title='You win this trade'; sub=`You gain roughly ${pct}% value based on your categories.`; }
-  else if (diff<-0.05) { cls='result-lose'; emoji='❌'; title='You lose this trade'; sub=`You give up roughly ${pct}% value. Consider asking for more.`; }
-  else { cls='result-even'; emoji='⚖️'; title='This trade is roughly even'; sub='Both sides are close in value. Comes down to positional fit or schedule.'; }
-  const catBreakdown = cats.map(c=>{
-    const giveAvg=tradeSides[0].reduce((s,p)=>s+p[c.key],0)/tradeSides[0].length;
-    const getAvg=tradeSides[1].reduce((s,p)=>s+p[c.key],0)/tradeSides[1].length;
-    const win=c.lower?getAvg<giveAvg:getAvg>giveAvg;
-    const lose=c.lower?getAvg>giveAvg:getAvg<giveAvg;
-    return `<div class="stat-row"><span class="stat-label">${c.label}</span><span style="font-size:13px">${giveAvg.toFixed(1)} → <strong style="font-weight:500;color:${win?'#1D9E75':lose?'#E24B4A':'#888'}">${getAvg.toFixed(1)}</strong></span></div>`;
-  }).join('');
-  document.getElementById('trade-result').innerHTML=`<div class="result-card ${cls}"><div class="result-title">${emoji} ${title}</div><div class="result-sub">${sub}</div></div><div class="card"><div class="card-title">Category breakdown <span style="font-size:12px;font-weight:400;color:#aaa">(giving → receiving)</span></div>${catBreakdown}</div>`;
-}
-
-document.addEventListener('click', e=>{
-  if (!e.target.closest('.search-box') && !e.target.closest('.mini-search')) {
-    ['drop1','drop2','trade-drop1','trade-drop2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  async function apiFetch(url) {
+    const res = await fetch(url, { headers: { Authorization: API_KEY } });
+    if (!res.ok) throw new Error('API error');
+    return res.json();
   }
-});
 
-buildCatGrids();
+  async function getPlayerStats(playerId) {
+    const data = await apiFetch(`${BASE}/season_averages?season=${SEASON}&player_ids[]=${playerId}`);
+    return data.data[0] || null;
+  }
+
+  async function searchPlayers(q) {
+    const data = await apiFetch(`${BASE}/players/search?search=${encodeURIComponent(q)}&per_page=8`);
+    return data.data || [];
+  }
+
+  function handleSearch(input, idx) {
+    const q = input.value.trim();
+    const drop = document.getElementById('drop' + idx);
+    if (!q) { drop.style.display = 'none'; return; }
+    clearTimeout(searchTimers[idx]);
+    drop.style.display = 'block';
+    drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">Searching...</div>';
+    searchTimers[idx] = setTimeout(async () => {
+      try {
+        const results = await searchPlayers(q);
+        if (!results.length) { drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">No players found</div>'; return; }
+        drop.innerHTML = results.map(p =>
+          `<div class="dropdown-item" onclick="selectPlayer(${p.id},'${p.first_name} ${p.last_name}','${p.team?.abbreviation||''}','${p.position||''}',${idx})">${p.first_name} ${p.last_name} <span style="color:#aaa;font-size:12px">· ${p.team?.full_name || ''}</span></div>`
+        ).join('');
+      } catch(e) {
+        drop.innerHTML = '<div class="dropdown-item" style="color:#E24B4A">Error loading players</div>';
+      }
+    }, 400);
+  }
+
+  async function selectPlayer(id, name, team, pos, slot) {
+    const drop = document.getElementById('drop' + slot);
+    const input = document.getElementById('search' + slot);
+    drop.style.display = 'none';
+    input.value = name;
+    document.getElementById('compare-content').innerHTML = `<div class="loading-state">Loading stats for ${name}...</div>`;
+    try {
+      const stats = await getPlayerStats(id);
+      if (!stats) { document.getElementById('compare-content').innerHTML = '<div class="error-state">No stats available for this player this season</div>'; return; }
+      selected[slot - 1] = { id, name, team, pos, ...stats };
+      if (!allLoadedPlayers.find(p => p.id === id)) allLoadedPlayers.push(selected[slot - 1]);
+      renderCompare();
+    } catch(e) {
+      document.getElementById('compare-content').innerHTML = '<div class="error-state">Could not load stats. Please try again.</div>';
+    }
+  }
+
+  function renderCompare() {
+    const main = document.getElementById('compare-content');
+    if (!selected[0] || !selected[1]) { main.innerHTML = '<div class="empty-state">Select a second player to compare</div>'; return; }
+    const p1 = selected[0], p2 = selected[1];
+    const fmt = v => v != null ? Number(v).toFixed(1) : 'N/A';
+    const win  = (a, b) => a != null && b != null && Number(a) > Number(b);
+    const cards = `<div class="player-cards">
+      <div class="player-card p1">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div><div class="player-name">${p1.name}</div><div class="player-team">${p1.team}</div></div>
+          <span class="tag">${p1.pos || '—'}</span>
+        </div>
+        ${statKeys.map(s => `<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${win(p1[s.key],p2[s.key])?'winner':''}">${fmt(p1[s.key])}</span></div>`).join('')}
+      </div>
+      <div class="player-card p2">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div><div class="player-name">${p2.name}</div><div class="player-team">${p2.team}</div></div>
+          <span class="tag">${p2.pos || '—'}</span>
+        </div>
+        ${statKeys.map(s => `<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${win(p2[s.key],p1[s.key])?'winner':''}">${fmt(p2[s.key])}</span></div>`).join('')}
+      </div>
+    </div>`;
+    const legend = `<div class="legend"><div class="legend-item"><span class="legend-dot" style="background:#378ADD"></span>${p1.name}</div><div class="legend-item"><span class="legend-dot" style="background:#D85A30"></span>${p2.name}</div><span style="font-size:12px;color:#aaa;margin-left:auto">green = higher value</span></div>`;
+    const bars = statKeys.map(s => {
+      const v1 = Number(p1[s.key]) || 0, v2 = Number(p2[s.key]) || 0;
+      const max = Math.max(v1, v2) || 1;
+      return `<div class="bar-section"><div class="bar-label"><span>${s.label}</span><span>${v1.toFixed(1)} vs ${v2.toFixed(1)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v1/max*100)}%;background:#378ADD"></div></div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v2/max*100)}%;background:#D85A30"></div></div></div>`;
+    }).join('');
+    main.innerHTML = cards + legend + bars;
+  }
+
+  function playerScore(p, cats) {
+    const pool = allLoadedPlayers.length > 1 ? allLoadedPlayers : [p];
+    let score = 0;
+    cats.forEach(c => {
+      const arr = pool.map(pl => Number(pl[c.key]) || 0);
+      const min = Math.min(...arr), max = Math.max(...arr);
+      const norm = max === min ? 0.5 : (Number(p[c.key] || 0) - min) / (max - min);
+      score += c.lower ? (1 - norm) : norm;
+    });
+    return score;
+  }
+
+  function buildCatGrids() {
+    [["cat-grid", activeCats], ["trade-cat-grid", tradeActiveCats]].forEach(([id, set]) => {
+      document.getElementById(id).innerHTML = allCats.map(c =>
+        `<button class="cat-btn ${set.has(c.key) ? 'active' : ''}" onclick="toggleCat('${c.key}','${id}')">${c.label}</button>`
+      ).join('');
+    });
+  }
+
+  function toggleCat(key, gridId) {
+    const set = gridId === 'cat-grid' ? activeCats : tradeActiveCats;
+    set.has(key) ? set.delete(key) : set.add(key);
+    buildCatGrids();
+  }
+
+  function switchTab(tab) {
+    ['general','rankings','trade'].forEach((t, i) => {
+      document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
+      document.querySelectorAll('.tab')[i].classList.toggle('active', t === tab);
+    });
+  }
+
+  function rankPlayers() {
+    const cats = allCats.filter(c => activeCats.has(c.key));
+    if (!cats.length) { document.getElementById('rank-results').innerHTML = '<div class="empty-state">Select at least one category</div>'; return; }
+    if (allLoadedPlayers.length < 2) { document.getElementById('rank-results').innerHTML = '<div class="empty-state">Search and compare players first — rankings are based on players you have loaded</div>'; return; }
+    const scored = allLoadedPlayers.map(p => ({ ...p, score: playerScore(p, cats) })).sort((a, b) => b.score - a.score);
+    const rows = scored.map((p, i) => `<tr><td class="rank-num">${i+1}</td><td><strong style="font-weight:500">${p.name}</strong><br><span style="font-size:11px;color:#aaa">${p.team} · ${p.pos || '—'}</span></td>${cats.map(c => `<td>${Number(p[c.key] || 0).toFixed(1)}</td>`).join('')}<td><span class="score-badge">${(p.score/cats.length*100).toFixed(0)}</span></td></tr>`).join('');
+    document.getElementById('rank-results').innerHTML = `<div class="card" style="overflow-x:auto"><table class="rank-table"><thead><tr><th>#</th><th>Player</th>${cats.map(c => `<th>${c.label}</th>`).join('')}<th>Score</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function tradeSearch(input, side) {
+    const drop = document.getElementById('trade-drop' + side);
+    const q = input.value.trim();
+    if (!q) { drop.style.display = 'none'; return; }
+    clearTimeout(searchTimers['t' + side]);
+    drop.style.display = 'block';
+    drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">Searching...</div>';
+    searchTimers['t' + side] = setTimeout(async () => {
+      try {
+        const results = await searchPlayers(q);
+        if (!results.length) { drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">No players found</div>'; return; }
+        drop.innerHTML = results.map(p =>
+          `<div class="dropdown-item" onclick="addToTrade(${p.id},'${p.first_name} ${p.last_name}','${p.team?.abbreviation||''}','${p.position||''}',${side},this)">${p.first_name} ${p.last_name} <span style="color:#aaa;font-size:12px">· ${p.team?.full_name || ''}</span></div>`
+        ).join('');
+      } catch(e) { drop.innerHTML = '<div class="dropdown-item" style="color:#E24B4A">Error</div>'; }
+    }, 400);
+  }
+
+  async function addToTrade(id, name, team, pos, side, el) {
+    if (tradeSides[side-1].find(x => x.id === id)) {
+      el.closest('.mini-search').querySelector('input').value = '';
+      document.getElementById('trade-drop' + side).style.display = 'none';
+      return;
+    }
+    el.closest('.mini-search').querySelector('input').value = '';
+    document.getElementById('trade-drop' + side).style.display = 'none';
+    const listEl = document.getElementById(side === 1 ? 'give-list' : 'get-list');
+    const chip = document.createElement('div');
+    chip.className = 'player-chip';
+    chip.innerHTML = `<span>${name}</span><span style="font-size:11px;color:#aaa">Loading...</span>`;
+    listEl.appendChild(chip);
+    try {
+      const stats = await getPlayerStats(id);
+      const player = { id, name, team, pos, ...(stats || {}) };
+      tradeSides[side-1].push(player);
+      if (!allLoadedPlayers.find(p => p.id === id)) allLoadedPlayers.push(player);
+      renderTradeLists();
+    } catch(e) { chip.remove(); }
+  }
+
+  function removeFromTrade(id, side) {
+    tradeSides[side-1] = tradeSides[side-1].filter(p => p.id !== id);
+    renderTradeLists();
+    document.getElementById('trade-result').innerHTML = '';
+  }
+
+  function renderTradeLists() {
+    ['give','get'].forEach((id, i) => {
+      document.getElementById(id + '-list').innerHTML = tradeSides[i].length
+        ? tradeSides[i].map(p => `<div class="player-chip"><span>${p.name} <span style="color:#aaa;font-size:11px">· ${p.pos || '—'}</span></span><button class="remove-btn" onclick="removeFromTrade(${p.id},${i+1})">×</button></div>`).join('')
+        : `<div style="font-size:13px;color:#aaa;padding:8px 0">No players added</div>`;
+    });
+  }
+
+  function analyzeTrade() {
+    const cats = allCats.filter(c => tradeActiveCats.has(c.key));
+    if (!tradeSides[0].length || !tradeSides[1].length) { document.getElementById('trade-result').innerHTML = '<div class="empty-state">Add players to both sides first</div>'; return; }
+    if (!cats.length) { document.getElementById('trade-result').innerHTML = '<div class="empty-state">Select at least one category</div>'; return; }
+    const scoreGroup = g => g.reduce((s, p) => s + playerScore(p, cats), 0) / g.length;
+    const giveScore = scoreGroup(tradeSides[0]), getScore = scoreGroup(tradeSides[1]);
+    const diff = getScore - giveScore;
+    const pct = Math.abs(diff / Math.max(giveScore, getScore) * 100).toFixed(0);
+    let cls, emoji, title, sub;
+    if (diff > 0.05)       { cls='result-win';  emoji='✅'; title='You win this trade';        sub=`You gain roughly ${pct}% value based on your categories.`; }
+    else if (diff < -0.05) { cls='result-lose'; emoji='❌'; title='You lose this trade';       sub=`You give up roughly ${pct}% value. Consider asking for more.`; }
+    else                   { cls='result-even'; emoji='⚖️'; title='This trade is roughly even'; sub='Both sides are close in value.'; }
+    const catBreakdown = cats.map(c => {
+      const ga = tradeSides[0].reduce((s, p) => s + Number(p[c.key] || 0), 0) / tradeSides[0].length;
+      const ge = tradeSides[1].reduce((s, p) => s + Number(p[c.key] || 0), 0) / tradeSides[1].length;
+      const win = c.lower ? ge < ga : ge > ga;
+      const lose = c.lower ? ge > ga : ge < ga;
+      return `<div class="stat-row"><span class="stat-label">${c.label}</span><span style="font-size:13px">${ga.toFixed(1)} → <strong style="font-weight:500;color:${win?'#1D9E75':lose?'#E24B4A':'#888'}">${ge.toFixed(1)}</strong></span></div>`;
+    }).join('');
+    document.getElementById('trade-result').innerHTML = `<div class="result-card ${cls}"><div class="result-title">${emoji} ${title}</div><div class="result-sub">${sub}</div></div><div class="card"><div class="card-title">Category breakdown <span style="font-size:12px;font-weight:400;color:#aaa">(giving → receiving)</span></div>${catBreakdown}</div>`;
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-box') && !e.target.closest('.mini-search')) {
+      ['drop1','drop2','trade-drop1','trade-drop2'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    }
+  });
+
+  async function init() {
+    try {
+      await apiFetch(`${BASE}/players?per_page=1`);
+      document.getElementById('live-badge').textContent = 'Live Data';
+    } catch(e) {
+      document.getElementById('live-badge').textContent = 'Offline';
+      document.getElementById('live-badge').style.background = '#FCEBEB';
+      document.getElementById('live-badge').style.color = '#A32D2D';
+    }
+  }
+
+  buildCatGrids();
+  init();
 </script>
 </body>
 </html>
