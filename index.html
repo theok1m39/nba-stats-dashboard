@@ -79,7 +79,7 @@
 
 <div class="header">
   <h1>🏀 NBA Analytics</h1>
-  <span class="live-badge" id="live-badge">Connecting...</span>
+  <span class="live-badge" id="live-badge">Live Data</span>
 </div>
 
 <div class="tabs">
@@ -167,26 +167,31 @@
     { key: "stl",    label: "Steals"   },
   ];
 
-  let activeCats      = new Set(["pts","ast","reb","fg3m","stl","blk","fg_pct"]);
-  let tradeActiveCats = new Set(["pts","ast","reb","fg3m","stl","blk","fg_pct"]);
-  let tradeSides      = [[], []];
-  let selected        = [null, null];
-  let searchTimers    = {};
+  let activeCats       = new Set(["pts","ast","reb","fg3m","stl","blk","fg_pct"]);
+  let tradeActiveCats  = new Set(["pts","ast","reb","fg3m","stl","blk","fg_pct"]);
+  let tradeSides       = [[], []];
+  let selected         = [null, null];
+  let searchTimers     = {};
   let allLoadedPlayers = [];
 
   async function apiFetch(url) {
     const res = await fetch(url, { headers: { Authorization: API_KEY } });
-    if (!res.ok) throw new Error('API error');
+    if (!res.ok) throw new Error(`API error ${res.status}`);
     return res.json();
   }
 
   async function getPlayerStats(playerId) {
-    const data = await apiFetch(`${BASE}/season_averages?season=${SEASON}&player_ids[]=${playerId}`);
-    return data.data[0] || null;
+    try {
+      const data = await apiFetch(`${BASE}/season_averages/${SEASON}?player_ids[]=${playerId}`);
+      return data.data[0] || null;
+    } catch(e) {
+      console.error('Stats error:', e);
+      return null;
+    }
   }
 
   async function searchPlayers(q) {
-   const data = await apiFetch(`${BASE}/players?search=${encodeURIComponent(q)}&per_page=8`);
+    const data = await apiFetch(`${BASE}/players?search=${encodeURIComponent(q)}&per_page=8`);
     return data.data || [];
   }
 
@@ -202,7 +207,7 @@
         const results = await searchPlayers(q);
         if (!results.length) { drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">No players found</div>'; return; }
         drop.innerHTML = results.map(p =>
-          `<div class="dropdown-item" onclick="selectPlayer(${p.id},'${p.first_name} ${p.last_name}','${p.team?.abbreviation||''}','${p.position||''}',${idx})">${p.first_name} ${p.last_name} <span style="color:#aaa;font-size:12px">· ${p.team?.full_name || ''}</span></div>`
+          `<div class="dropdown-item" onclick="selectPlayer(${p.id},'${p.first_name} ${p.last_name}','${p.team?.abbreviation||''}','${p.position||''}',${idx})">${p.first_name} ${p.last_name} <span style="color:#aaa;font-size:12px">· ${p.team?.full_name||''}</span></div>`
         ).join('');
       } catch(e) {
         drop.innerHTML = '<div class="dropdown-item" style="color:#E24B4A">Error loading players</div>';
@@ -211,20 +216,17 @@
   }
 
   async function selectPlayer(id, name, team, pos, slot) {
-    const drop = document.getElementById('drop' + slot);
-    const input = document.getElementById('search' + slot);
-    drop.style.display = 'none';
-    input.value = name;
+    document.getElementById('drop' + slot).style.display = 'none';
+    document.getElementById('search' + slot).value = name;
     document.getElementById('compare-content').innerHTML = `<div class="loading-state">Loading stats for ${name}...</div>`;
-    try {
-      const stats = await getPlayerStats(id);
-      if (!stats) { document.getElementById('compare-content').innerHTML = '<div class="error-state">No stats available for this player this season</div>'; return; }
-      selected[slot - 1] = { id, name, team, pos, ...stats };
-      if (!allLoadedPlayers.find(p => p.id === id)) allLoadedPlayers.push(selected[slot - 1]);
-      renderCompare();
-    } catch(e) {
-      document.getElementById('compare-content').innerHTML = '<div class="error-state">Could not load stats. Please try again.</div>';
+    const stats = await getPlayerStats(id);
+    if (!stats) {
+      document.getElementById('compare-content').innerHTML = '<div class="error-state">No stats found for this player in the 2024 season. Try an active player.</div>';
+      return;
     }
+    selected[slot - 1] = { id, name, team, pos, ...stats };
+    if (!allLoadedPlayers.find(p => p.id === id)) allLoadedPlayers.push(selected[slot - 1]);
+    renderCompare();
   }
 
   function renderCompare() {
@@ -232,27 +234,27 @@
     if (!selected[0] || !selected[1]) { main.innerHTML = '<div class="empty-state">Select a second player to compare</div>'; return; }
     const p1 = selected[0], p2 = selected[1];
     const fmt = v => v != null ? Number(v).toFixed(1) : 'N/A';
-    const win  = (a, b) => a != null && b != null && Number(a) > Number(b);
+    const win = (a, b) => a != null && b != null && Number(a) > Number(b);
     const cards = `<div class="player-cards">
       <div class="player-card p1">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div><div class="player-name">${p1.name}</div><div class="player-team">${p1.team}</div></div>
-          <span class="tag">${p1.pos || '—'}</span>
+          <span class="tag">${p1.pos||'—'}</span>
         </div>
-        ${statKeys.map(s => `<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${win(p1[s.key],p2[s.key])?'winner':''}">${fmt(p1[s.key])}</span></div>`).join('')}
+        ${statKeys.map(s=>`<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${win(p1[s.key],p2[s.key])?'winner':''}">${fmt(p1[s.key])}</span></div>`).join('')}
       </div>
       <div class="player-card p2">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <div><div class="player-name">${p2.name}</div><div class="player-team">${p2.team}</div></div>
-          <span class="tag">${p2.pos || '—'}</span>
+          <span class="tag">${p2.pos||'—'}</span>
         </div>
-        ${statKeys.map(s => `<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${win(p2[s.key],p1[s.key])?'winner':''}">${fmt(p2[s.key])}</span></div>`).join('')}
+        ${statKeys.map(s=>`<div class="stat-row"><span class="stat-label">${s.label}</span><span class="stat-val ${win(p2[s.key],p1[s.key])?'winner':''}">${fmt(p2[s.key])}</span></div>`).join('')}
       </div>
     </div>`;
     const legend = `<div class="legend"><div class="legend-item"><span class="legend-dot" style="background:#378ADD"></span>${p1.name}</div><div class="legend-item"><span class="legend-dot" style="background:#D85A30"></span>${p2.name}</div><span style="font-size:12px;color:#aaa;margin-left:auto">green = higher value</span></div>`;
     const bars = statKeys.map(s => {
-      const v1 = Number(p1[s.key]) || 0, v2 = Number(p2[s.key]) || 0;
-      const max = Math.max(v1, v2) || 1;
+      const v1 = Number(p1[s.key])||0, v2 = Number(p2[s.key])||0;
+      const max = Math.max(v1,v2)||1;
       return `<div class="bar-section"><div class="bar-label"><span>${s.label}</span><span>${v1.toFixed(1)} vs ${v2.toFixed(1)}</span></div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v1/max*100)}%;background:#378ADD"></div></div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v2/max*100)}%;background:#D85A30"></div></div></div>`;
     }).join('');
     main.innerHTML = cards + legend + bars;
@@ -262,18 +264,18 @@
     const pool = allLoadedPlayers.length > 1 ? allLoadedPlayers : [p];
     let score = 0;
     cats.forEach(c => {
-      const arr = pool.map(pl => Number(pl[c.key]) || 0);
+      const arr = pool.map(pl => Number(pl[c.key])||0);
       const min = Math.min(...arr), max = Math.max(...arr);
-      const norm = max === min ? 0.5 : (Number(p[c.key] || 0) - min) / (max - min);
-      score += c.lower ? (1 - norm) : norm;
+      const norm = max===min ? 0.5 : (Number(p[c.key]||0)-min)/(max-min);
+      score += c.lower ? (1-norm) : norm;
     });
     return score;
   }
 
   function buildCatGrids() {
-    [["cat-grid", activeCats], ["trade-cat-grid", tradeActiveCats]].forEach(([id, set]) => {
+    [["cat-grid", activeCats],["trade-cat-grid", tradeActiveCats]].forEach(([id, set]) => {
       document.getElementById(id).innerHTML = allCats.map(c =>
-        `<button class="cat-btn ${set.has(c.key) ? 'active' : ''}" onclick="toggleCat('${c.key}','${id}')">${c.label}</button>`
+        `<button class="cat-btn ${set.has(c.key)?'active':''}" onclick="toggleCat('${c.key}','${id}')">${c.label}</button>`
       ).join('');
     });
   }
@@ -285,116 +287,102 @@
   }
 
   function switchTab(tab) {
-    ['general','rankings','trade'].forEach((t, i) => {
-      document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
-      document.querySelectorAll('.tab')[i].classList.toggle('active', t === tab);
+    ['general','rankings','trade'].forEach((t,i) => {
+      document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
+      document.querySelectorAll('.tab')[i].classList.toggle('active', t===tab);
     });
   }
 
   function rankPlayers() {
     const cats = allCats.filter(c => activeCats.has(c.key));
-    if (!cats.length) { document.getElementById('rank-results').innerHTML = '<div class="empty-state">Select at least one category</div>'; return; }
-    if (allLoadedPlayers.length < 2) { document.getElementById('rank-results').innerHTML = '<div class="empty-state">Search and compare players first — rankings are based on players you have loaded</div>'; return; }
-    const scored = allLoadedPlayers.map(p => ({ ...p, score: playerScore(p, cats) })).sort((a, b) => b.score - a.score);
-    const rows = scored.map((p, i) => `<tr><td class="rank-num">${i+1}</td><td><strong style="font-weight:500">${p.name}</strong><br><span style="font-size:11px;color:#aaa">${p.team} · ${p.pos || '—'}</span></td>${cats.map(c => `<td>${Number(p[c.key] || 0).toFixed(1)}</td>`).join('')}<td><span class="score-badge">${(p.score/cats.length*100).toFixed(0)}</span></td></tr>`).join('');
-    document.getElementById('rank-results').innerHTML = `<div class="card" style="overflow-x:auto"><table class="rank-table"><thead><tr><th>#</th><th>Player</th>${cats.map(c => `<th>${c.label}</th>`).join('')}<th>Score</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    if (!cats.length) { document.getElementById('rank-results').innerHTML='<div class="empty-state">Select at least one category</div>'; return; }
+    if (allLoadedPlayers.length < 2) { document.getElementById('rank-results').innerHTML='<div class="empty-state">Search and compare players first — rankings are based on players you have loaded</div>'; return; }
+    const scored = allLoadedPlayers.map(p=>({...p,score:playerScore(p,cats)})).sort((a,b)=>b.score-a.score);
+    const rows = scored.map((p,i)=>`<tr><td class="rank-num">${i+1}</td><td><strong style="font-weight:500">${p.name}</strong><br><span style="font-size:11px;color:#aaa">${p.team} · ${p.pos||'—'}</span></td>${cats.map(c=>`<td>${Number(p[c.key]||0).toFixed(1)}</td>`).join('')}<td><span class="score-badge">${(p.score/cats.length*100).toFixed(0)}</span></td></tr>`).join('');
+    document.getElementById('rank-results').innerHTML=`<div class="card" style="overflow-x:auto"><table class="rank-table"><thead><tr><th>#</th><th>Player</th>${cats.map(c=>`<th>${c.label}</th>`).join('')}<th>Score</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   function tradeSearch(input, side) {
-    const drop = document.getElementById('trade-drop' + side);
+    const drop = document.getElementById('trade-drop'+side);
     const q = input.value.trim();
-    if (!q) { drop.style.display = 'none'; return; }
-    clearTimeout(searchTimers['t' + side]);
-    drop.style.display = 'block';
-    drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">Searching...</div>';
-    searchTimers['t' + side] = setTimeout(async () => {
+    if (!q) { drop.style.display='none'; return; }
+    clearTimeout(searchTimers['t'+side]);
+    drop.style.display='block';
+    drop.innerHTML='<div class="dropdown-item" style="color:#aaa">Searching...</div>';
+    searchTimers['t'+side] = setTimeout(async () => {
       try {
         const results = await searchPlayers(q);
-        if (!results.length) { drop.innerHTML = '<div class="dropdown-item" style="color:#aaa">No players found</div>'; return; }
+        if (!results.length) { drop.innerHTML='<div class="dropdown-item" style="color:#aaa">No players found</div>'; return; }
         drop.innerHTML = results.map(p =>
-          `<div class="dropdown-item" onclick="addToTrade(${p.id},'${p.first_name} ${p.last_name}','${p.team?.abbreviation||''}','${p.position||''}',${side},this)">${p.first_name} ${p.last_name} <span style="color:#aaa;font-size:12px">· ${p.team?.full_name || ''}</span></div>`
+          `<div class="dropdown-item" onclick="addToTrade(${p.id},'${p.first_name} ${p.last_name}','${p.team?.abbreviation||''}','${p.position||''}',${side},this)">${p.first_name} ${p.last_name} <span style="color:#aaa;font-size:12px">· ${p.team?.full_name||''}</span></div>`
         ).join('');
-      } catch(e) { drop.innerHTML = '<div class="dropdown-item" style="color:#E24B4A">Error</div>'; }
+      } catch(e) { drop.innerHTML='<div class="dropdown-item" style="color:#E24B4A">Error</div>'; }
     }, 400);
   }
 
   async function addToTrade(id, name, team, pos, side, el) {
-    if (tradeSides[side-1].find(x => x.id === id)) {
-      el.closest('.mini-search').querySelector('input').value = '';
-      document.getElementById('trade-drop' + side).style.display = 'none';
+    if (tradeSides[side-1].find(x=>x.id===id)) {
+      el.closest('.mini-search').querySelector('input').value='';
+      document.getElementById('trade-drop'+side).style.display='none';
       return;
     }
-    el.closest('.mini-search').querySelector('input').value = '';
-    document.getElementById('trade-drop' + side).style.display = 'none';
-    const listEl = document.getElementById(side === 1 ? 'give-list' : 'get-list');
+    el.closest('.mini-search').querySelector('input').value='';
+    document.getElementById('trade-drop'+side).style.display='none';
+    const listEl = document.getElementById(side===1?'give-list':'get-list');
     const chip = document.createElement('div');
-    chip.className = 'player-chip';
-    chip.innerHTML = `<span>${name}</span><span style="font-size:11px;color:#aaa">Loading...</span>`;
+    chip.className='player-chip';
+    chip.innerHTML=`<span>${name}</span><span style="font-size:11px;color:#aaa">Loading...</span>`;
     listEl.appendChild(chip);
-    try {
-      const stats = await getPlayerStats(id);
-      const player = { id, name, team, pos, ...(stats || {}) };
-      tradeSides[side-1].push(player);
-      if (!allLoadedPlayers.find(p => p.id === id)) allLoadedPlayers.push(player);
-      renderTradeLists();
-    } catch(e) { chip.remove(); }
+    const stats = await getPlayerStats(id);
+    if (!stats) { chip.innerHTML=`<span>${name}</span><span style="font-size:11px;color:#E24B4A">No 2024 stats</span>`; return; }
+    const player = { id, name, team, pos, ...stats };
+    tradeSides[side-1].push(player);
+    if (!allLoadedPlayers.find(p=>p.id===id)) allLoadedPlayers.push(player);
+    renderTradeLists();
   }
 
   function removeFromTrade(id, side) {
-    tradeSides[side-1] = tradeSides[side-1].filter(p => p.id !== id);
+    tradeSides[side-1] = tradeSides[side-1].filter(p=>p.id!==id);
     renderTradeLists();
-    document.getElementById('trade-result').innerHTML = '';
+    document.getElementById('trade-result').innerHTML='';
   }
 
   function renderTradeLists() {
-    ['give','get'].forEach((id, i) => {
-      document.getElementById(id + '-list').innerHTML = tradeSides[i].length
-        ? tradeSides[i].map(p => `<div class="player-chip"><span>${p.name} <span style="color:#aaa;font-size:11px">· ${p.pos || '—'}</span></span><button class="remove-btn" onclick="removeFromTrade(${p.id},${i+1})">×</button></div>`).join('')
+    ['give','get'].forEach((id,i)=>{
+      document.getElementById(id+'-list').innerHTML = tradeSides[i].length
+        ? tradeSides[i].map(p=>`<div class="player-chip"><span>${p.name} <span style="color:#aaa;font-size:11px">· ${p.pos||'—'}</span></span><button class="remove-btn" onclick="removeFromTrade(${p.id},${i+1})">×</button></div>`).join('')
         : `<div style="font-size:13px;color:#aaa;padding:8px 0">No players added</div>`;
     });
   }
 
   function analyzeTrade() {
-    const cats = allCats.filter(c => tradeActiveCats.has(c.key));
-    if (!tradeSides[0].length || !tradeSides[1].length) { document.getElementById('trade-result').innerHTML = '<div class="empty-state">Add players to both sides first</div>'; return; }
-    if (!cats.length) { document.getElementById('trade-result').innerHTML = '<div class="empty-state">Select at least one category</div>'; return; }
-    const scoreGroup = g => g.reduce((s, p) => s + playerScore(p, cats), 0) / g.length;
-    const giveScore = scoreGroup(tradeSides[0]), getScore = scoreGroup(tradeSides[1]);
-    const diff = getScore - giveScore;
-    const pct = Math.abs(diff / Math.max(giveScore, getScore) * 100).toFixed(0);
-    let cls, emoji, title, sub;
-    if (diff > 0.05)       { cls='result-win';  emoji='✅'; title='You win this trade';        sub=`You gain roughly ${pct}% value based on your categories.`; }
-    else if (diff < -0.05) { cls='result-lose'; emoji='❌'; title='You lose this trade';       sub=`You give up roughly ${pct}% value. Consider asking for more.`; }
-    else                   { cls='result-even'; emoji='⚖️'; title='This trade is roughly even'; sub='Both sides are close in value.'; }
-    const catBreakdown = cats.map(c => {
-      const ga = tradeSides[0].reduce((s, p) => s + Number(p[c.key] || 0), 0) / tradeSides[0].length;
-      const ge = tradeSides[1].reduce((s, p) => s + Number(p[c.key] || 0), 0) / tradeSides[1].length;
-      const win = c.lower ? ge < ga : ge > ga;
-      const lose = c.lower ? ge > ga : ge < ga;
+    const cats = allCats.filter(c=>tradeActiveCats.has(c.key));
+    if (!tradeSides[0].length||!tradeSides[1].length) { document.getElementById('trade-result').innerHTML='<div class="empty-state">Add players to both sides first</div>'; return; }
+    if (!cats.length) { document.getElementById('trade-result').innerHTML='<div class="empty-state">Select at least one category</div>'; return; }
+    const scoreGroup = g => g.reduce((s,p)=>s+playerScore(p,cats),0)/g.length;
+    const giveScore=scoreGroup(tradeSides[0]), getScore=scoreGroup(tradeSides[1]);
+    const diff=getScore-giveScore;
+    const pct=Math.abs(diff/Math.max(giveScore,getScore)*100).toFixed(0);
+    let cls,emoji,title,sub;
+    if (diff>0.05)       {cls='result-win'; emoji='✅';title='You win this trade';        sub=`You gain roughly ${pct}% value based on your categories.`;}
+    else if(diff<-0.05)  {cls='result-lose';emoji='❌';title='You lose this trade';       sub=`You give up roughly ${pct}% value. Consider asking for more.`;}
+    else                 {cls='result-even';emoji='⚖️';title='This trade is roughly even';sub='Both sides are close in value.';}
+    const catBreakdown=cats.map(c=>{
+      const ga=tradeSides[0].reduce((s,p)=>s+Number(p[c.key]||0),0)/tradeSides[0].length;
+      const ge=tradeSides[1].reduce((s,p)=>s+Number(p[c.key]||0),0)/tradeSides[1].length;
+      const win=c.lower?ge<ga:ge>ga, lose=c.lower?ge>ga:ge<ga;
       return `<div class="stat-row"><span class="stat-label">${c.label}</span><span style="font-size:13px">${ga.toFixed(1)} → <strong style="font-weight:500;color:${win?'#1D9E75':lose?'#E24B4A':'#888'}">${ge.toFixed(1)}</strong></span></div>`;
     }).join('');
-    document.getElementById('trade-result').innerHTML = `<div class="result-card ${cls}"><div class="result-title">${emoji} ${title}</div><div class="result-sub">${sub}</div></div><div class="card"><div class="card-title">Category breakdown <span style="font-size:12px;font-weight:400;color:#aaa">(giving → receiving)</span></div>${catBreakdown}</div>`;
+    document.getElementById('trade-result').innerHTML=`<div class="result-card ${cls}"><div class="result-title">${emoji} ${title}</div><div class="result-sub">${sub}</div></div><div class="card"><div class="card-title">Category breakdown <span style="font-size:12px;font-weight:400;color:#aaa">(giving → receiving)</span></div>${catBreakdown}</div>`;
   }
 
-  document.addEventListener('click', e => {
-    if (!e.target.closest('.search-box') && !e.target.closest('.mini-search')) {
-      ['drop1','drop2','trade-drop1','trade-drop2'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  document.addEventListener('click', e=>{
+    if (!e.target.closest('.search-box')&&!e.target.closest('.mini-search')) {
+      ['drop1','drop2','trade-drop1','trade-drop2'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
     }
   });
 
-  async function init() {
-    try {
-      await apiFetch(`${BASE}/players?per_page=1`);
-      document.getElementById('live-badge').textContent = 'Live Data';
-    } catch(e) {
-      document.getElementById('live-badge').textContent = 'Offline';
-      document.getElementById('live-badge').style.background = '#FCEBEB';
-      document.getElementById('live-badge').style.color = '#A32D2D';
-    }
-  }
-
   buildCatGrids();
-  init();
 </script>
 </body>
 </html>
