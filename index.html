@@ -186,7 +186,7 @@
   }
 
   async function searchPlayers(q) {
-    const data = await apiFetch(`${BASE}/players/search?search=${encodeURIComponent(q)}&per_page=8`);
+   const data = await apiFetch(`${BASE}/players?search=${encodeURIComponent(q)}&per_page=8`);
     return data.data || [];
   }
 
